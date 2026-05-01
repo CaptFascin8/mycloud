@@ -1,0 +1,14 @@
+[package]
+name    = "auth"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+ic-cdk               = { workspace = true }
+ic-cdk-macros        = { workspace = true }
+candid               = { workspace = true }
+serde                = { workspace = true }
+ic-stable-structures = { workspace = true }

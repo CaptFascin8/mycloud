@@ -1,0 +1,9 @@
+type User = record {
+  principal  : principal;
+  registered : nat64;
+};
+
+service : {
+  whoami   : () -> (principal) query;
+  register : () -> (User);
+}

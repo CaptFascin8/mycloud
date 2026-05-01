@@ -1,0 +1,29 @@
+[workspace]
+# All canister crates share dependency versions and a single target/ dir.
+resolver = "2"
+members = [
+    "backend/auth",
+    "backend/registry",
+    "backend/manager",
+]
+
+[workspace.dependencies]
+ic-cdk               = "0.17"
+ic-cdk-macros        = "0.17"
+ic-cdk-timers        = "0.11"
+candid               = "0.10"
+serde                = { version = "1", features = ["derive"] }
+serde_bytes          = "0.11"
+serde_json           = "1"
+ic-stable-structures = "0.6"
+sha2                 = "0.10"
+hex                  = "0.4"
+
+# Wasm-tuned release profile. ICP charges per instruction; smaller binaries
+# cost less to deploy and run.
+[profile.release]
+opt-level     = "z"
+lto           = true
+codegen-units = 1
+panic         = "abort"
+strip         = true

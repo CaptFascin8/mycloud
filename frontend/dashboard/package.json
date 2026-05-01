@@ -1,0 +1,24 @@
+{
+  "name":    "mycloud-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "type":    "module",
+  "scripts": {
+    "dev":     "vite",
+    "build":   "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react":     "^18.3.0",
+    "react-dom": "^18.3.0",
+    "@dfinity/agent":       "^2.1.0",
+    "@dfinity/auth-client": "^2.1.0",
+    "@dfinity/candid":      "^2.1.0",
+    "@dfinity/principal":   "^2.1.0",
+    "@dfinity/identity":    "^2.1.0"
+  },
+  "devDependencies": {
+    "vite":                "^5.4.0",
+    "@vitejs/plugin-react": "^4.3.0"
+  }
+}

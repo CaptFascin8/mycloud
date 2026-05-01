@@ -1,0 +1,44 @@
+# Rust / Cargo
+target/
+**/*.rs.bk
+Cargo.lock
+
+# ICP / dfx
+.dfx/
+.env
+canister_ids.json
+dist/
+
+# Node / Vite
+node_modules/
+frontend/**/dist/
+frontend/**/.vite/
+frontend/**/.turbo/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Secrets
+*.pem
+*.key
+.env.*
+!.env.example
+secrets/
+*.identity.json
+
+# IPFS / VPS state
+vps/docker/data/
+vps/docker/ipfs-data/
+vps/docker/nginx/letsencrypt/
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.wasm
+*.wasm.gz

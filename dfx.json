@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "dfx": "0.32.0",
+  "output_env_file": ".env",
+  "canisters": {
+    "auth": {
+      "type": "rust",
+      "package": "auth",
+      "candid": "backend/auth/auth.did",
+      "metadata": [{ "name": "candid:service", "visibility": "public" }]
+    },
+    "registry": {
+      "type": "rust",
+      "package": "registry",
+      "candid": "backend/registry/registry.did",
+      "metadata": [{ "name": "candid:service", "visibility": "public" }],
+      "dependencies": ["auth"]
+    },
+    "manager": {
+      "type": "rust",
+      "package": "manager",
+      "candid": "backend/manager/manager.did",
+      "metadata": [{ "name": "candid:service", "visibility": "public" }],
+      "dependencies": ["auth", "registry"]
+    },
+    "internet_identity": {
+      "type": "custom",
+      "candid": "https://github.com/dfinity/internet-identity/releases/latest/download/internet_identity.did",
+      "wasm":   "https://github.com/dfinity/internet-identity/releases/latest/download/internet_identity_dev.wasm.gz",
+      "remote": { "id": { "ic": "rdmx6-jaaaa-aaaaa-aaadq-cai" } },
+      "frontend": {},
+      "init_arg": "(null)"
+    },
+    "dashboard": {
+      "type": "assets",
+      "source": ["frontend/dashboard/dist"],
+      "dependencies": ["auth", "registry", "manager"]
+    }
+  },
+  "defaults": {
+    "build":   { "args": "", "packtool": "" },
+    "replica": { "subnet_type": "application" }
+  },
+  "networks": {
+    "local": {
+      "bind":    "127.0.0.1:4943",
+      "type":    "ephemeral",
+      "replica": { "subnet_type": "application" }
+    },
+    "ic": {
+      "providers": ["https://ic0.app"],
+      "type":      "persistent"
+    }
+  }
+}

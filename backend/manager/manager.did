@@ -1,0 +1,13 @@
+type Severity = variant { Info; Warn; Error };
+
+type HealthEvent = record {
+  timestamp_ns : nat64;
+  source       : text;
+  severity     : Severity;
+  message      : text;
+};
+
+service : {
+  recent_events  : (nat32) -> (vec HealthEvent) query;
+  cycles_balance : ()      -> (nat64) query;
+}

@@ -1,0 +1,21 @@
+type KeyTier = variant { Root; Trunk; Branch; Crown; Domain };
+
+type OwnershipProof = variant {
+  InternetIdentity;
+  SolanaNft   : record { mint: text; wallet: text; tier: opt KeyTier };
+  EthereumNft : record { contract: text; token_id: text; wallet: text };
+};
+
+type Smartsite = record {
+  domain     : text;
+  owner      : principal;
+  ipfs_cid   : text;
+  created_ns : nat64;
+  updated_ns : nat64;
+  ownership  : OwnershipProof;
+};
+
+service : {
+  list_sites    : ()           -> (vec Smartsite) query;
+  register_site : (text, text) -> (Smartsite);
+}
