@@ -1,9 +1,44 @@
 type User = record {
-  principal  : principal;
+  id         : principal;
   registered : nat64;
+  last_seen  : nat64;
+};
+
+type CredentialEntry = record {
+  label      : text;
+  data       : blob;
+  created_ns : nat64;
+  updated_ns : nat64;
+};
+
+type HealthStatus = record {
+  canister      : text;
+  ok            : bool;
+  user_count    : nat64;
+  vault_entries : nat64;
+  timestamp_ns  : nat64;
+};
+
+type AuthError = variant {
+  NotRegistered;
+  NotFound;
+  Unauthorized;
+  BadInput : text;
 };
 
 service : {
-  whoami   : () -> (principal) query;
-  register : () -> (User);
+  // user registry
+  whoami        : ()                  -> (principal) query;
+  register      : ()                  -> (User);
+  get_me        : ()                  -> (variant { Ok : User; Err : AuthError }) query;
+  user_count    : ()                  -> (nat64) query;
+
+  // credential vault
+  put_credential    : (text, blob)    -> (variant { Ok : CredentialEntry; Err : AuthError });
+  get_credential    : (text)          -> (variant { Ok : CredentialEntry; Err : AuthError }) query;
+  list_credentials  : ()              -> (variant { Ok : vec text; Err : AuthError }) query;
+  delete_credential : (text)          -> (variant { Ok : bool; Err : AuthError });
+
+  // health
+  health_check  : ()                  -> (HealthStatus) query;
 }

@@ -4,11 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]   # rlib enables `cargo test` for unit tests
 
 [dependencies]
 ic-cdk               = { workspace = true }
 ic-cdk-macros        = { workspace = true }
 candid               = { workspace = true }
 serde                = { workspace = true }
+serde_bytes          = { workspace = true }
 ic-stable-structures = { workspace = true }
