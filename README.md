@@ -45,3 +45,9 @@ dfx deploy --network local
 ## Status
 **Checkpoint 1: Scaffold complete.** Next: `cargo check --workspace` ->
 write real canister logic. See `docs/PROOF_PLAN.md`.
+**Checkpoint 3a complete.** auth canister deployed locally with stable storage + credential vault.
+See `docs/PROOF_PLAN.md` for what's next.
+## Repo
+- VPS:    `/opt/mycloud` on srv825251.hstgr.cloud
+- HOPE:   `C:\MY_CLOUD`
+- GitHub: https://github.com/CaptFascin8/mycloud (private)
