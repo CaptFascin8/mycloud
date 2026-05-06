@@ -17,9 +17,9 @@ Avoids collisions with HOPE Master Stack, Agentic Acres, Metivi Mesh Studio.
 
 ## Reserved
 - 9602 — Kubo Web UI dev exposure (if ever needed)
-- 9603 — First MyCloud agent
-- 9604 — Second MyCloud agent
-- 9605 — Third MyCloud agent
+- 9603 — Agent Zero (Python + ic-py canister router; see CLOUD_FACTORY.md)
+- 9604 — Project H.O.P.E. (first MyCloud-resident agent)
+- 9605 — Reserved for next agent
 
 When adding a new service, claim the next free 96xx port and update this
 table in the same commit.

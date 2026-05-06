@@ -35,3 +35,24 @@ Acres' nomadic identity here yet. Get MyCloud's three canisters working
 with placeholder data first (Checkpoints 2-3). When Crystal Dragon hits
 Phase 2 and Agentic Acres hits Proof Cycle 11, the integration points
 are already in place.
+
+
+## Future architecture: project canisters + Agent Zero (the cloud factory)
+
+Beyond the three core canisters (auth, registry, manager), the long-term
+shape of MyCloud is **one canister per project** — small, focused canisters
+each owning a domain (hopeandgrace, metiverse, etc.) — with a Python-based
+**Agent Zero** running on the VPS that routes incoming work to the right
+canister by reading their Candid IDLs.
+
+This pattern is documented separately in `CLOUD_FACTORY.md` — including:
+- Why "one canister per project" (not per feature) is the right granularity
+- Agent Zero deployment design (Docker, ic-py, port 9603)
+- Inter-canister call cost considerations
+- Caller-principal verification for trigger methods
+- A staged rollout: don't build the cloud factory before there are canisters
+  worth routing to.
+
+**Status:** planned for after Checkpoints 3b + 3c + 4 ship. Don't pre-build
+the routing layer; build canisters first, the routing pattern emerges
+naturally from their Candid interfaces.
