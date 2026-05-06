@@ -1,9 +1,20 @@
 type KeyTier = variant { Root; Trunk; Branch; Crown; Domain };
 
+type EvmChain = variant { Ethereum; Polygon; Base; Arbitrum; Optimism };
+
 type OwnershipProof = variant {
   InternetIdentity;
-  SolanaNft   : record { mint: text; wallet: text; tier: opt KeyTier };
-  EthereumNft : record { contract: text; token_id: text; wallet: text };
+  SolanaNft : record {
+    mint   : text;
+    wallet : text;
+    tier   : opt KeyTier;
+  };
+  EthereumNft : record {
+    contract : text;
+    token_id : text;
+    wallet   : text;
+    chain    : EvmChain;
+  };
 };
 
 type Smartsite = record {
@@ -15,7 +26,33 @@ type Smartsite = record {
   ownership  : OwnershipProof;
 };
 
+type RegistryError = variant {
+  AlreadyRegistered;
+  NotFound;
+  Unauthorized;
+  InvalidDomain   : text;
+  InvalidCid      : text;
+  NotImplemented  : text;
+  AnonymousCaller;
+};
+
+type HealthStatus = record {
+  canister     : text;
+  ok           : bool;
+  site_count   : nat64;
+  timestamp_ns : nat64;
+};
+
 service : {
-  list_sites    : ()           -> (vec Smartsite) query;
-  register_site : (text, text) -> (Smartsite);
+  // smartsite CRUD
+  register_site  : (text, text, OwnershipProof) -> (variant { Ok : Smartsite; Err : RegistryError });
+  get_site       : (text)                       -> (variant { Ok : Smartsite; Err : RegistryError }) query;
+  list_sites     : ()                           -> (vec Smartsite) query;
+  sites_by_owner : (principal)                  -> (vec Smartsite) query;
+  update_cid     : (text, text)                 -> (variant { Ok : Smartsite; Err : RegistryError });
+  delete_site    : (text)                       -> (variant { Ok : bool;      Err : RegistryError });
+  site_count     : ()                           -> (nat64) query;
+
+  // health (polled by manager)
+  health_check   : () -> (HealthStatus) query;
 }
