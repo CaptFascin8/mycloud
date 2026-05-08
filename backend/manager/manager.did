@@ -1,13 +1,66 @@
 type Severity = variant { Info; Warn; Error };
 
 type HealthEvent = record {
+  seq          : nat64;
   timestamp_ns : nat64;
   source       : text;
   severity     : Severity;
   message      : text;
 };
 
+type WatchedCanister = record {
+  id                : principal;
+  label             : text;
+  cycles_threshold  : nat64;
+  last_balance      : opt nat64;
+  last_check_ns     : opt nat64;
+  last_status_ok    : opt bool;
+  registered_ns     : nat64;
+};
+
+type Config = record {
+  owner              : principal;
+  poll_interval_secs : nat64;
+  max_events         : nat32;
+  default_threshold  : nat64;
+};
+
+type ManagerError = variant {
+  Unauthorized;
+  NotFound;
+  AlreadyWatched;
+  InvalidConfig       : text;
+  InsufficientCycles  : record { available : nat64; requested : nat64 };
+};
+
+type HealthStatus = record {
+  canister       : text;
+  ok             : bool;
+  event_count    : nat64;
+  watched_count  : nat64;
+  timestamp_ns   : nat64;
+  cycles_balance : nat64;
+};
+
 service : {
+  // events (read)
   recent_events  : (nat32) -> (vec HealthEvent) query;
-  cycles_balance : ()      -> (nat64) query;
+  event_count    : ()      -> (nat64) query;
+
+  // watch list (admin)
+  watch_canister   : (principal, text, opt nat64) -> (variant { Ok : WatchedCanister; Err : ManagerError });
+  unwatch_canister : (principal)                  -> (variant { Ok : bool;             Err : ManagerError });
+  list_watched     : ()                           -> (vec WatchedCanister) query;
+
+  // cycles management (admin)
+  cycles_balance : ()                  -> (nat64) query;
+  top_up         : (principal, nat64)  -> (variant { Ok : nat64; Err : ManagerError });
+
+  // config (admin)
+  get_config        : ()        -> (Config) query;
+  set_poll_interval : (nat64)   -> (variant { Ok; Err : ManagerError });
+
+  // health (symmetric with auth + registry)
+  health_check    : () -> (HealthStatus) query;
+  force_check_now : () -> (variant { Ok : nat64; Err : ManagerError });
 }
