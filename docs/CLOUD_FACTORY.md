@@ -115,18 +115,25 @@ Mitigated by (a) caller-principal verification on every trigger
 method, (b) Agent Zero's principal is distinct and revocable, (c) all
 trigger methods log their caller for audit.
 
-### 5. NFT gating uses Solana, not Polygon
+### 5. NFT gating: use what you already have
 
-Crystal Dragon already runs on Solana. Reusing one chain integration:
-- One wallet flow (Phantom/Solflare)
-- One HTTP outcall verifier (in `registry`)
-- One audit (the smart contract review for Crystal Dragon also covers
-  MyCloud's verification logic)
+Crystal Dragon's Yggdrasil KEYs are minted on Solana — that integration
+goes in the registry canister regardless. For *MyCloud dashboard*
+gating, use whatever NFTs you already hold; the `OwnershipVerifier`
+trait supports multiple chains:
 
-For dashboard access NFTs (if you want them later), mint them on Solana
-in the same KEY contract Crystal Dragon uses, with a different tier or
-collection. **Don't add Polygon as a third chain.** Two chains
-(Solana + ICP) plus the VPS is already enough surface area to maintain.
+- `OwnershipProof::SolanaNft { mint, wallet, tier }` for Crystal Dragon KEYs
+- `OwnershipProof::EthereumNft { contract, token_id, wallet }` for
+  Polygon NFTs (Polygon is EVM-compatible, so Ethereum-shaped verifier
+  works) or for any other EVM chain (Base, Arbitrum, Optimism)
+
+The cost of "yet another chain" is mostly minting + maintaining the
+collection. If you already minted Polygon NFTs you want to use, the
+HTTP outcall to a Polygon RPC adds maybe 50 lines of Rust to the
+verifier — not 50 lines per dashboard, just 50 lines once.
+
+What we **don't** do: add a chain just to add it. If a feature can be
+done with the chains we already integrate, it should be.
 
 ---
 

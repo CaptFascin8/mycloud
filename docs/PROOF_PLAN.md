@@ -32,21 +32,30 @@ Five checkpoints, each a "stop, verify, proceed" gate.
 3. **SSH-backgrounded `dfx start` needs `nohup ... </dev/null & disown`** to survive the SSH session ending.
 4. **Remote scripting via `bash -lc "..."` is fragile.** Always write scripts to a file and execute by path.
 
-## ⏭️ Checkpoint 3b — registry canister (NEXT)
-- Smartsite CRUD with stable storage
-- OwnershipVerifier trait with one working impl (InternetIdentity)
-- Stub impls for SolanaNft/EthereumNft returning Err("not implemented")
-- Trait shape ready for Crystal Dragon Yggdrasil KEY tier verification later
-- Integration test scripts/test_registry.sh
+## ✅ Checkpoint 3b — registry canister (DONE)
+- Smartsite CRUD with stable storage (BTreeMap<Domain, Smartsite>)
+- Owner secondary index (BTreeMap<(Owner, Domain), ()>) for fast sites_by_owner
+- OwnershipVerifier trait with InternetIdentity impl + Solana/Ethereum stubs
+- EvmChain enum supports Polygon/ETH/Base/Arbitrum/Optimism
+- Trait shape ready for Crystal Dragon Yggdrasil KEY tier verification
+- Domain validation, CID validation, owner-only enforcement
+- 7 unit tests + 18-call integration test (scripts/test_registry.sh)
 
-## Checkpoint 3c — manager canister
-- ic-cdk-timers periodic tick (every 60s)
-- Ring buffer of HealthEvents (last 100, queryable by dashboard)
-- Polls auth + registry health_check() via inter-canister calls
-- Cycle balance threshold warnings
-- HTTP outcall stub for future "self-healing" agent
+**Commit:** `65ed6e1` — "checkpoint 3b: registry canister with smartsite CRUD + ownership verifier trait"
 
-## Checkpoint 4 — VPS provisioned (PARTIALLY DONE)
+## ✅ Checkpoint 3c — manager canister (DONE)
+- ic-cdk-timers periodic tick (60s default, configurable 10..=86400)
+- Ring buffer of HealthEvents (max 100, configurable, in stable BTreeMap)
+- Inter-canister calls to auth + registry health_check()
+- WatchedCanister entries track last_check_ns, last_status_ok per target
+- Owner-based access control on all admin methods
+- top_up validation logic (real cycle transfer stubbed pending controller setup)
+- Timer survives upgrades via post_upgrade re-arm
+- 3 unit tests + 18-call integration test (scripts/test_manager.sh)
+
+**Commit:** `9abf5d8` — "checkpoint 3c: manager canister with health watcher + cycles bursar"
+
+## ⏭️ Checkpoint 4 — VPS provisioned (PARTIALLY DONE — next)
 What we already have:
 - Ubuntu 24.04 on srv825251.hstgr.cloud
 - Rust 1.95, dfx 0.32, Node 20, Docker 29 installed

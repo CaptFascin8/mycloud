@@ -42,3 +42,6 @@ Thumbs.db
 # Build artifacts
 *.wasm
 *.wasm.gz
+
+# Personal — not for the public repo
+docs/STARTUP_GUIDE.md
