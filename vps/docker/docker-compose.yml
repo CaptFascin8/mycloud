@@ -1,6 +1,12 @@
-# MyCloud VPS service stack — run on srv825251.hstgr.cloud (or HOPE for dev).
+# MyCloud VPS service stack — runs alongside the system-level Nginx
+# that already serves crystaldragon.tech and hopeandgrace.space on this box.
+#
+# This compose stack provides ONLY the IPFS Kubo node. System Nginx
+# proxies /ipfs/* requests on srv825251.hstgr.cloud to localhost:9601.
+# See /etc/nginx/sites-enabled/srv825251.hstgr.cloud.
+#
 # Ports per docs/PORTS.md; MyCloud owns the 96xx block.
-#   docker compose up -d
+#   docker compose up -d ipfs
 
 services:
   ipfs:
@@ -19,23 +25,10 @@ services:
       - "4001:4001/udp"
       # 9600 -> 5001 = RPC API. LOCALHOST ONLY. Treat as root-equivalent.
       - "127.0.0.1:9600:5001"
-      # 9601 -> 8080 = HTTP gateway. LOCALHOST ONLY; Nginx proxies it.
+      # 9601 -> 8080 = HTTP gateway. LOCALHOST ONLY; system Nginx proxies it.
       - "127.0.0.1:9601:8080"
     healthcheck:
       test:     ["CMD", "ipfs", "id"]
       interval: 30s
       timeout:  10s
       retries:  3
-
-  nginx:
-    image:          nginx:1.27-alpine
-    container_name: mycloud-nginx
-    restart:        unless-stopped
-    depends_on:     [ipfs]
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/conf.d:/etc/nginx/conf.d:ro
-      - ./nginx/letsencrypt:/etc/letsencrypt
-      - ./nginx/www:/var/www/html

@@ -2,6 +2,29 @@
 
 Daily operating guide. If something is broken at 11pm, this is the file you want.
 
+## Important context: the VPS is shared
+
+`srv825251.hstgr.cloud` hosts THREE projects, not just MyCloud:
+
+- **crystaldragon.tech** + **www.crystaldragon.tech** — Crystal Dragon's
+  static site (served from `/usr/share/nginx/html`)
+- **hopeandgrace.space** + **www.hopeandgrace.space** + **api.hopeandgrace.space** —
+  Hope & Grace charitable network (static frontend + PM2-backed API on port 3000)
+- **srv825251.hstgr.cloud** — MyCloud's IPFS gateway and (eventually) dashboard
+
+This means:
+- **System-level Nginx** is the front door for all three projects. Don't
+  stop or replace it.
+- **TLS certs** for all three are managed by a single `certbot` install
+  with auto-renewal in `/etc/letsencrypt/renewal/`.
+- **PM2** manages the Hope & Grace API. Don't kill PM2 processes you
+  don't recognize.
+- **MyCloud's docker stack** runs IPFS Kubo only — Nginx duties are
+  handled by the system-level install.
+
+If you find yourself thinking "let me just take port 80," stop. Read
+this section again. There are real production services on this box.
+
 ## Quick reference
 
 | Task | Command |
