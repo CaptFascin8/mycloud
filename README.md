@@ -96,16 +96,31 @@ For a deeper architecture walkthrough, see
 
 ## Status
 
-**Three of three core canisters are real, deployed, and tested.**
+**Three of three core canisters are real, deployed, and tested.
+Public IPFS gateway is live.**
 
 | Layer | Status | What it does |
 |-------|--------|--------------|
 | `auth` canister | ✅ shipped | Internet Identity binding + per-user encrypted credential vault |
 | `registry` canister | ✅ shipped | Smartsite CRUD + chain-agnostic OwnershipVerifier trait |
 | `manager` canister | ✅ shipped | Periodic health watcher + cycles bursar with ring-buffer event log |
-| VPS provisioning | partial | Toolchain installed (Rust, dfx, Node, Docker); IPFS + Nginx pending |
+| VPS provisioning | ✅ shipped | IPFS Kubo + system Nginx + Let's Encrypt TLS on shared host |
+| Public IPFS gateway | ✅ live | https://srv825251.hstgr.cloud/ipfs/&lt;cid&gt; returns content over TLS |
 | Frontend dashboard | scaffold | Vite + React skeleton, real UI pending |
 | HTTP outcall verifiers | stubbed | Trait shape exists; Solana/Polygon RPC implementations pending |
+
+### Live demo
+
+Try fetching content from the gateway:
+
+```bash
+curl https://srv825251.hstgr.cloud/ipfs/QmQv3RwfXhT9mMCoCf1yVAfBmAts7B66B1kZ4gXbJ6R3Lh
+```
+
+Returns: *"Hello MyCloud, this is the bytes layer talking. Phase A is shipping."*
+
+That's a real CID retrievable via real TLS from a real IPFS node
+running on real infrastructure. No metaphors.
 
 See [docs/PROOF_PLAN.md](docs/PROOF_PLAN.md) for the full checkpoint
 roadmap.

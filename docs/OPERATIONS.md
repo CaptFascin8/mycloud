@@ -37,6 +37,15 @@ this section again. There are real production services on this box.
 | Restart dfx replica | `bash /tmp/dfx-restart.sh` |
 | Check git history | `git log --oneline` |
 | See what changed | `git status` then `git diff` |
+| IPFS container status | `docker ps --filter name=mycloud-ipfs` |
+| IPFS daemon logs | `docker logs mycloud-ipfs --tail 50` |
+| Add file to IPFS | `echo "..." \| docker exec -i mycloud-ipfs ipfs add -Q` |
+| Fetch via local gateway | `curl http://127.0.0.1:9601/ipfs/<cid>` |
+| Fetch via public gateway | `curl https://srv825251.hstgr.cloud/ipfs/<cid>` |
+| IPFS peer count | `docker exec mycloud-ipfs ipfs swarm peers \| wc -l` |
+| Restart IPFS | `cd /opt/mycloud/vps/docker && docker compose restart ipfs` |
+| Reload nginx after config edit | `nginx -t && systemctl reload nginx` |
+| Cert status | `certbot certificates` |
 
 ## Where everything lives
 

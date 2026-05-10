@@ -55,18 +55,32 @@ Five checkpoints, each a "stop, verify, proceed" gate.
 
 **Commit:** `9abf5d8` — "checkpoint 3c: manager canister with health watcher + cycles bursar"
 
-## ⏭️ Checkpoint 4 — VPS provisioned (PARTIALLY DONE — next)
-What we already have:
+## ✅ Checkpoint 4 — VPS provisioned (DONE)
+
+What we have:
 - Ubuntu 24.04 on srv825251.hstgr.cloud
 - Rust 1.95, dfx 0.32, Node 20, Docker 29 installed
 - ufw firewall with only 22/80/443/4001 open
 - SSH key authentication working
 - Project deployed to /opt/mycloud with full git history
+- IPFS Kubo container running via docker-compose (mycloud-ipfs)
+  - Swarm: 0.0.0.0:4001/tcp + 4001/udp (libp2p peering)
+  - RPC API: 127.0.0.1:9600 (localhost-only, root-equivalent access)
+  - Gateway: 127.0.0.1:9601 (localhost-only, system Nginx proxies)
+- System Nginx (apt 1.24) routing srv825251.hstgr.cloud → IPFS gateway
+- Let's Encrypt TLS cert for srv825251.hstgr.cloud, ECDSA key, 90-day
+  auto-renewal alongside Crystal Dragon + Hope & Grace certs
+- Public IPFS gateway tested end-to-end:
+  https://srv825251.hstgr.cloud/ipfs/<cid> returns content over TLS
+- Production sites (crystaldragon.tech, hopeandgrace.space) confirmed
+  unaffected throughout
 
-What's left:
-- IPFS Kubo container running (`docker compose up -d`)
-- Nginx with Let's Encrypt TLS for srv825251.hstgr.cloud
-- End-to-end `curl https://srv825251.hstgr.cloud/ipfs/<known-cid>` test
+Architectural note: the VPS is shared with Crystal Dragon and Hope &
+Grace. MyCloud's docker-compose runs IPFS only — system Nginx (already
+present) handles all TLS termination and domain routing. See
+`docs/OPERATIONS.md` "shared VPS" section.
+
+**Commit:** TBD on next push — "checkpoint 4: phase A shipped (IPFS Kubo + Nginx + TLS)"
 
 ## Checkpoint 5 — End-to-end
 - Dashboard builds and deploys as an asset canister
