@@ -22,8 +22,17 @@ This means:
 - **MyCloud's docker stack** runs IPFS Kubo only — Nginx duties are
   handled by the system-level install.
 
-If you find yourself thinking "let me just take port 80," stop. Read
-this section again. There are real production services on this box.
+There is also a **Crystal Dragon docker stack** that's been running
+since early May 2026 (predates MyCloud's IPFS work). It provides
+Crystal Dragon's AI features and the foundation of the cloud factory's
+agent layer. See `docs/PORTS.md` for the full container list and ports.
+**Do not stop or modify those containers without coordination** — they
+support active development on Crystal Dragon.
+
+If you find yourself thinking "let me just take port 80," or "let me
+clean up these old containers," STOP. Read this section again. There
+are real production services on this box, and a real Crystal Dragon
+dev stack alongside them.
 
 ## Quick reference
 

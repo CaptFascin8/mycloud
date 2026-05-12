@@ -326,24 +326,58 @@ informs the next:
 
 ### Stage 0 (current) — Build the core canisters
 - ✅ auth (Checkpoint 3a)
-- ⏭️ registry (Checkpoint 3b — next)
-- ⏭️ manager with cycles management (Checkpoint 3c)
+- ✅ registry (Checkpoint 3b)
+- ✅ manager with cycles management (Checkpoint 3c)
 
-**Don't write Agent Zero code yet.** It would be designing in the dark.
+**Status update May 12, 2026:** Agent Zero, n8n, Ollama, and the
+supporting services (Redis, Postgres, ChromaDB) are already running on
+the VPS — they were deployed during Crystal Dragon development. See
+`docs/PORTS.md` for the full container list. This means Stage 1 below
+is closer to "wire it up" than "build it."
 
-### Stage 1 — VPS provisioning + dashboard
-- IPFS Kubo + Nginx (Checkpoint 4)
-- Vite/React dashboard with Internet Identity login (Checkpoint 5)
-- Dashboard shows the three core canisters' state, cycle balances,
-  health timeline
+### Stage 1 — Wire MyCloud canisters to the existing Agent Zero
+- Agent Zero is already running on the VPS at port 50001 (web UI) +
+  port 50003 (HTTP/MCP API).
+- What's missing: a tool definition inside Agent Zero that uses `ic-py`
+  to call our canisters by name.
+- Validation: one Agent Zero command, like "list smartsites," that
+  successfully calls registry.list_sites() and returns the result.
+- This is small work (~half a day), not a new container deployment.
 
-### Stage 2 — Add Agent Zero
-- `vps/agents/agent-zero/` Docker container
-- Configure to talk to existing 3 canisters
-- One n8n workflow that fires through Agent Zero to a real canister
-- **Validate the pattern works with what we already have**
+**⚠️ Known issue (discovered May 12, 2026):** the Agent Zero container
+is currently crash-looping. `docker ps` reports it "Up" because
+supervisord is fine, but the Python application inside fails to start
+with:
+```
+ModuleNotFoundError: No module named 'langchain_groq'
+  File "/a0/models.py", line 16, in <module>
+    from langchain_groq import ChatGroq
+```
+Ports 50001 and 50003 return HTTP 000 (no listener). Image:
+`frdel/agent-zero-run:latest`. Configured for `MISTRAL_MODEL=mistral`
+against the local Ollama instance.
 
-### Stage 3 — First external project: hopeandgrace
+Fix paths when we get to Stage 1 (NOT urgent — we don't need Agent
+Zero until the cloud factory needs routing):
+- Pin to an older tag of `frdel/agent-zero-run` that pre-dates the
+  langchain_groq dependency
+- Rebuild the image with `pip install langchain_groq>=0.X` added
+- Fork the upstream repo and fix the import
+- Switch to a different agent framework entirely (Open-WebUI, etc.)
+
+The langchain ecosystem has had several reorganizations; this is a
+common kind of breakage with rapidly-evolving Python deps.
+
+### Stage 2 — Add the MyCloud dashboard
+- Vite/React dashboard at `frontend/dashboard/`
+- Internet Identity login
+- Reads from auth/registry/manager canisters
+- Shows site fleet, canister health, cycles balance
+- Deployed as ICP asset canister
+- See `docs/DASHBOARD_PLAN.md` (to be written) for the incremental
+  build plan
+
+### Stage 3 — First external project canister: hopeandgrace
 - New canister `backend/hopeandgrace_main/`
 - Implements `CloudCanister` trait
 - Add to dfx.json
