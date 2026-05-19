@@ -20,6 +20,12 @@
 //!   Today only `InternetIdentity` verifies fully (caller == owner principal).
 //!   `SolanaNft` and `EthereumNft` are stubs that return `Err(NotImplemented)`;
 //!   they will use HTTP outcalls to the respective RPCs when implemented.
+//!
+//! Checkpoint 3b.1 additions (May 2026):
+//!   * Smartsite gains `status`, `container_id`, `expires_ns` fields for
+//!     dashboard visibility and bridge-daemon integration.
+//!   * New methods: `update_site_status`, `set_container_id` (owner-only).
+//!   * Backward compatible: old records deserialize with sensible defaults.
 
 use candid::{CandidType, Decode, Encode, Principal};
 use ic_cdk::{init, query, update};
@@ -34,15 +40,56 @@ use std::cell::RefCell;
 // Types — public API
 // ---------------------------------------------------------------------------
 
+/// Lifecycle state of a smartsite, from registration through serving
+/// through retirement. The bridge daemon (when it exists) updates this
+/// via `update_site_status`. The dashboard reads it via `get_site`.
+#[derive(CandidType, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SiteStatus {
+    /// Just registered. Bridge daemon hasn't deployed the Cloud Can yet.
+    Provisioning,
+    /// Cloud Can running. Site serving traffic.
+    Active,
+    /// Migrated to fully-on-chain (per INTEGRATION_PLAN.md Phase H).
+    /// VPS container retired; site lives in its own ICP asset canister.
+    Purified,
+    /// Owner action or non-payment. Container stopped, registry preserved.
+    Suspended,
+    /// Explicit teardown. Container removed, but registry record kept
+    /// for historical/audit purposes.
+    Decommissioned,
+}
+
+impl Default for SiteStatus {
+    fn default() -> Self { SiteStatus::Provisioning }
+}
+
 /// A registered smartsite.
 #[derive(CandidType, Serialize, Deserialize, Clone, Debug)]
 pub struct Smartsite {
-    pub domain:     String,        // e.g. "johns-bakery.crystaldragon.tech"
-    pub owner:      Principal,     // Internet Identity principal
-    pub ipfs_cid:   String,        // CIDv1 of the site root, or "" if hosted off-IPFS
-    pub created_ns: u64,
-    pub updated_ns: u64,
-    pub ownership:  OwnershipProof,
+    pub domain:       String,        // e.g. "johns-bakery.crystaldragon.tech"
+    pub owner:        Principal,     // Internet Identity principal
+    pub ipfs_cid:     String,        // CIDv1 of the site root, or "" if hosted off-IPFS
+    pub created_ns:   u64,
+    pub updated_ns:   u64,
+    pub ownership:    OwnershipProof,
+
+    // --- Checkpoint 3b.1 additions ---
+
+    /// Lifecycle state. Defaults to Provisioning on register; bridge
+    /// daemon updates to Active when the Cloud Can is serving.
+    #[serde(default)]
+    pub status:       SiteStatus,
+
+    /// Docker container ID once the Cloud Can is deployed. None during
+    /// Provisioning, Some(id) once Active, None again after Decommissioned.
+    #[serde(default)]
+    pub container_id: Option<String>,
+
+    /// When this site's storage allocation expires (nanoseconds since
+    /// Unix epoch). None = perpetual / paid for life. Used by the
+    /// future cleanup job to identify abandoned sites.
+    #[serde(default)]
+    pub expires_ns:   Option<u64>,
 }
 
 /// Pluggable ownership proof. Today `InternetIdentity` is verified
@@ -258,6 +305,10 @@ fn verify_ownership(caller: Principal, proof: &OwnershipProof) -> Result<(), Reg
 
 /// Register a new smartsite. Caller becomes the owner.
 /// Fails if domain is already taken.
+///
+/// New sites start in `SiteStatus::Provisioning` with no container_id
+/// and no expiry. Bridge daemon (when it exists) updates these via
+/// `update_site_status` and `set_container_id`.
 #[update]
 fn register_site(
     domain:    String,
@@ -275,12 +326,15 @@ fn register_site(
 
     let now = ic_cdk::api::time();
     let site = Smartsite {
-        domain:     domain.clone(),
-        owner:      caller,
+        domain:       domain.clone(),
+        owner:        caller,
         ipfs_cid,
-        created_ns: now,
-        updated_ns: now,
+        created_ns:   now,
+        updated_ns:   now,
         ownership,
+        status:       SiteStatus::Provisioning,
+        container_id: None,
+        expires_ns:   None,
     };
 
     SITES.with(|sites| {
@@ -343,6 +397,53 @@ fn update_cid(domain: String, new_cid: String) -> Result<Smartsite, RegistryErro
             return Err(RegistryError::Unauthorized);
         }
         site.ipfs_cid   = new_cid;
+        site.updated_ns = ic_cdk::api::time();
+        sites.insert(domain, site.clone());
+        Ok(site)
+    })
+}
+
+/// Update the lifecycle status of a smartsite. Only the owner can do this.
+/// Called by the bridge daemon to report deployment progress, by the
+/// owner to suspend/decommission, and (eventually) by the migration job
+/// to mark a site as Purified.
+#[update]
+fn update_site_status(domain: String, new_status: SiteStatus)
+    -> Result<Smartsite, RegistryError>
+{
+    let caller = ic_cdk::api::caller();
+    SITES.with(|sites| {
+        let mut sites = sites.borrow_mut();
+        let mut site = sites.get(&domain).ok_or(RegistryError::NotFound)?;
+        if site.owner != caller {
+            return Err(RegistryError::Unauthorized);
+        }
+        site.status     = new_status;
+        site.updated_ns = ic_cdk::api::time();
+        sites.insert(domain, site.clone());
+        Ok(site)
+    })
+}
+
+/// Set or clear the Docker container ID for a smartsite. Only the owner
+/// can do this. Pass an empty string to clear (sets to None internally).
+/// Called by the bridge daemon after `docker compose up` succeeds.
+#[update]
+fn set_container_id(domain: String, container_id: String)
+    -> Result<Smartsite, RegistryError>
+{
+    let caller = ic_cdk::api::caller();
+    SITES.with(|sites| {
+        let mut sites = sites.borrow_mut();
+        let mut site = sites.get(&domain).ok_or(RegistryError::NotFound)?;
+        if site.owner != caller {
+            return Err(RegistryError::Unauthorized);
+        }
+        site.container_id = if container_id.is_empty() {
+            None
+        } else {
+            Some(container_id)
+        };
         site.updated_ns = ic_cdk::api::time();
         sites.insert(domain, site.clone());
         Ok(site)
@@ -480,7 +581,6 @@ mod tests {
 
     #[test]
     fn cid_validation_accepts_typical_cidv1() {
-        // A real-ish CIDv1 (base32, 59 chars)
         let cid = "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi";
         assert!(validate_cid_optional(cid).is_ok());
     }
@@ -506,5 +606,11 @@ mod tests {
         let mut keys = vec![bob_a.clone(), alice_b.clone(), alice_a.clone()];
         keys.sort();
         assert_eq!(keys, vec![alice_a, alice_b, bob_a]);
+    }
+
+    #[test]
+    fn site_status_default_is_provisioning() {
+        let status: SiteStatus = Default::default();
+        assert_eq!(status, SiteStatus::Provisioning);
     }
 }

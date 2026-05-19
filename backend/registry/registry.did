@@ -2,6 +2,14 @@ type KeyTier = variant { Root; Trunk; Branch; Crown; Domain };
 
 type EvmChain = variant { Ethereum; Polygon; Base; Arbitrum; Optimism };
 
+type SiteStatus = variant {
+  Provisioning;
+  Active;
+  Purified;
+  Suspended;
+  Decommissioned;
+};
+
 type OwnershipProof = variant {
   InternetIdentity;
   SolanaNft : record {
@@ -18,12 +26,15 @@ type OwnershipProof = variant {
 };
 
 type Smartsite = record {
-  domain     : text;
-  owner      : principal;
-  ipfs_cid   : text;
-  created_ns : nat64;
-  updated_ns : nat64;
-  ownership  : OwnershipProof;
+  domain       : text;
+  owner        : principal;
+  ipfs_cid     : text;
+  created_ns   : nat64;
+  updated_ns   : nat64;
+  ownership    : OwnershipProof;
+  status       : SiteStatus;
+  container_id : opt text;
+  expires_ns   : opt nat64;
 };
 
 type RegistryError = variant {
@@ -45,14 +56,25 @@ type HealthStatus = record {
 
 service : {
   // smartsite CRUD
-  register_site  : (text, text, OwnershipProof) -> (variant { Ok : Smartsite; Err : RegistryError });
-  get_site       : (text)                       -> (variant { Ok : Smartsite; Err : RegistryError }) query;
-  list_sites     : ()                           -> (vec Smartsite) query;
-  sites_by_owner : (principal)                  -> (vec Smartsite) query;
-  update_cid     : (text, text)                 -> (variant { Ok : Smartsite; Err : RegistryError });
-  delete_site    : (text)                       -> (variant { Ok : bool;      Err : RegistryError });
-  site_count     : ()                           -> (nat64) query;
+  register_site       : (text, text, OwnershipProof)
+                          -> (variant { Ok : Smartsite; Err : RegistryError });
+  get_site            : (text)
+                          -> (variant { Ok : Smartsite; Err : RegistryError }) query;
+  list_sites          : ()
+                          -> (vec Smartsite) query;
+  sites_by_owner      : (principal)
+                          -> (vec Smartsite) query;
+  update_cid          : (text, text)
+                          -> (variant { Ok : Smartsite; Err : RegistryError });
+  update_site_status  : (text, SiteStatus)
+                          -> (variant { Ok : Smartsite; Err : RegistryError });
+  set_container_id    : (text, text)
+                          -> (variant { Ok : Smartsite; Err : RegistryError });
+  delete_site         : (text)
+                          -> (variant { Ok : bool;      Err : RegistryError });
+  site_count          : ()
+                          -> (nat64) query;
 
   // health (polled by manager)
-  health_check   : () -> (HealthStatus) query;
+  health_check        : () -> (HealthStatus) query;
 }
