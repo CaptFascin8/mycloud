@@ -396,6 +396,39 @@ common kind of breakage with rapidly-evolving Python deps.
 - Agent Zero still does LLM reasoning; the router enforces routing
   rules immutably
 
+### Stage 6 — Future hardening: vetKeys for sensitive on-chain data
+
+vetKeys (Verifiably Encrypted Threshold Keys) have been in production
+on ICP mainnet since 2025. DFINITY ships ready-made KeyManager and
+EncryptedMaps libraries on top.
+
+Three places vetKeys would meaningfully improve MyCloud:
+
+1. **`auth` canister credential vault** — currently stores user
+   credentials in stable storage as plain bytes. vetKeys would
+   encrypt each entry to the owning Principal, so even canister
+   state inspection couldn't reveal credentials. Strongest fit.
+
+2. **Per-blessing canisters for Hope & Grace** — recipient story
+   text and financial details could be vetKey-encrypted so the
+   public canister proves the blessing happened, but only the
+   recipient (and delegated auditors) can read the sensitive parts.
+
+3. **Crystal Dragon site secrets** — `site_config` JSON, PayPal
+   tokens, custom-domain registrar credentials encrypted to the
+   wallet that owns the Yggdrasil KEY NFT. Selling the NFT
+   transfers vetKey access automatically.
+
+**Why deferred:** vetKey integration is non-trivial (~1-2 weeks):
+client-side decryption flow, key-derivation namespace design,
+rotation handling. And we have zero users today — adding vetKeys to
+an empty registry is theater. Revisit after the dashboard ships and
+the first real smartsite is registered.
+
+When we're ready: depend on `ic-vetkd-utils`, follow DFINITY's
+KeyManager pattern, scope the work into Crystal Dragon's audit budget
+so it gets reviewed once not twice.
+
 ---
 
 ## What this is NOT
