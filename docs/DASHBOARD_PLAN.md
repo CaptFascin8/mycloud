@@ -1,6 +1,23 @@
 # MyCloud Dashboard — Build Plan
 
-**Status:** Plan written May 16, 2026. Ready to execute when there's
+**Status:** DEFERRED behind Hope & Grace canister (June 7, 2026).
+
+Hope & Grace is going to live battle testing this week with real bank
+account, real donations, real users. The hopeandgrace canister is now
+the priority path. See `docs/HOPEANDGRACE_INTEGRATION_SPEC.md`.
+
+When we come back to the dashboard, the first canister it'll read from
+will be `hopeandgrace` (real data) rather than `registry` (still empty),
+which is actually better — the dashboard is more useful with real data
+to display.
+
+The rest of this document remains accurate for when we resume; just
+swap "Site Registry MVP" for "Hope & Grace Ceremonies MVP" as the
+first view we build.
+
+---
+
+**Status (original):** Plan written May 16, 2026. Ready to execute when there's
 a fresh focus block.
 
 **Goal:** Build the first React page that talks to a MyCloud canister

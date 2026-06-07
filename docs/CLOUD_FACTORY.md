@@ -429,6 +429,14 @@ When we're ready: depend on `ic-vetkd-utils`, follow DFINITY's
 KeyManager pattern, scope the work into Crystal Dragon's audit budget
 so it gets reviewed once not twice.
 
+**Caveat for whoever implements this:** vetKeys API renamed multiple
+times during its 2-year preview period. Snippets found via LLMs or
+old blog posts likely reference outdated method names (`vetkey_encrypted_key`,
+`G1`/`G2` curve enums, separate system canister IDs). The current API
+goes through the management canister (`aaaaa-aa`) via `vetkd_public_key`
+and `vetkd_derive_key`. Always read DFINITY's live docs at implementation
+time rather than trusting any cached snippet, including this one.
+
 ---
 
 ## What this is NOT

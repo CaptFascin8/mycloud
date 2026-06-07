@@ -89,9 +89,34 @@ present) handles all TLS termination and domain routing. See
 - Pin a file to local IPFS, register the CID
 - Visit https://srv825251.hstgr.cloud/ipfs/<cid> and see the content
 
-## Future milestones
-- **Solana NFT verification** — registry's OwnershipProof::SolanaNft becomes trustlessly verifiable via HTTP outcalls to Solana RPC
-- **Project H.O.P.E.** — first agent under vps/agents/hope/
-- **Self-healing manager** — when a health check fails, manager makes an HTTP outcall to a healer agent that has Docker socket access and can `docker restart mycloud-ipfs`
-- **GitHub Actions CI** — every push runs cargo check, cargo test, dfx build automatically
-- **Migration to icp-cli** — when dfx 0.32 is fully replaced
+## ⏭️ Checkpoint 4.5 — Hope & Grace canister (PRIORITY — next)
+
+First external project canister deployment. Hope & Grace is going to
+live battle testing this week with real bank account, real donations,
+real users. The hopeandgrace canister provides the immutable ceremony
+ledger and legal-doc registry that powers the Ripples of Compassion
+public transparency page.
+
+Spec locked in `docs/HOPEANDGRACE_INTEGRATION_SPEC.md` (June 7, 2026).
+Six architectural decisions made in response to Hope & Grace Claude's
+integration handoff:
+
+- Integer cents on-chain (no floats)
+- Story text on IPFS via CID + hash on chain (right-to-be-forgotten path)
+- New dedicated `hopeandgrace` canister (not a module on existing ones)
+- Owner + Vec<writers> access model
+- Hall of Angels handle resolution stays off-chain
+- Ripples reads canister directly via @dfinity/agent
+
+Build phases (~10 hours total across MyCloud + Hope & Grace sides):
+1. Spec lock — DONE
+2. Canister implementation (Rust, ~4 hours fresh session)
+3. Deploy to mainnet (~1 hour, ~$5 USD cycles)
+4. Hope & Grace side daily archive job (~2 hours, H&G Claude's work)
+5. Ripples page on hopeandgrace.space (~3 hours, can parallel)
+6. Legal doc publishing UI (~1 hour, low priority)
+
+## Checkpoint 5 — Dashboard MVP (DEFERRED behind 4.5)
+
+See `docs/DASHBOARD_PLAN.md`. Now will read hopeandgrace canister
+as its first real data source rather than the empty registry.
