@@ -5,6 +5,7 @@ members = [
     "backend/auth",
     "backend/registry",
     "backend/manager",
+    "backend/hopeandgrace",
 ]
 
 [workspace.dependencies]

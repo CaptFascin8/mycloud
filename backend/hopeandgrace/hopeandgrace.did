@@ -1,0 +1,136 @@
+// hopeandgrace canister Candid interface — Phase 1a (types only).
+// Methods will be added in Phase 1b.
+//
+// All money values are nat64 cents. All percentages are nat32 basis points
+// (1 bps = 0.01%). No floats anywhere — these constraints exist because
+// canister state must be byte-for-byte identical across all replicating
+// nodes, and float comparisons are not guaranteed to be deterministic.
+
+type CeremonyOutcome = variant { Claimed; RevertedToChalice; Pending };
+
+type LedgerEntry = record {
+  entry_type:          text;
+  amount_cents:        int64;
+  balance_after_cents: nat64;
+  party:               text;
+  description:         text;
+  at_ns:               nat64;
+};
+
+type CeremonySplit = record {
+  soul_base_cents:       nat64;
+  angel_gross_cents:     nat64;
+  divine_offering_cents: nat64;
+  divine_offering_bps:   nat32;
+};
+
+type AngelOutcome = record {
+  uuid:          text;
+  claimed:       bool;
+  donated_bps:   nat32;
+  donated_cents: nat64;
+  kept_cents:    nat64;
+};
+
+type SoulOutcome = record {
+  uuid:                 text;
+  engaged:              bool;
+  reverted:             bool;
+  reverted_at_ns:       opt nat64;
+  total_received_cents: nat64;
+  story_cid:            opt text;
+  story_hash:           opt text;
+};
+
+type DirectBlessings = record {
+  total_cents: nat64;
+  donor_count: nat64;
+};
+
+type SettlementRecord = record {
+  record_version:   nat32;
+  ceremony_number:  nat64;
+  ceremony_date:    text;
+  random_seed:      text;
+  pool_total_cents: nat64;
+  split:            CeremonySplit;
+  angel:            AngelOutcome;
+  soul:             SoulOutcome;
+  direct_blessings: DirectBlessings;
+  outcome:          CeremonyOutcome;
+  rollover_cents:   nat64;
+  ops_ledger_entry: LedgerEntry;
+  ledger:           vec LedgerEntry;
+  generated_at_ns:  nat64;
+  archived_at_ns:   nat64;
+  content_hash:     text;
+};
+
+type SettlementSummary = record {
+  ceremony_number:     nat64;
+  ceremony_date:       text;
+  outcome:             CeremonyOutcome;
+  pool_total_cents:    nat64;
+  soul_received_cents: nat64;
+  has_story:           bool;
+  content_hash:        text;
+};
+
+type Totals = record {
+  ceremonies:                   nat64;
+  total_pool_cents:             nat64;
+  total_to_souls_cents:         nat64;
+  total_divine_offering_cents:  nat64;
+  total_direct_blessings_cents: nat64;
+  souls_blessed:                nat64;
+  angels_active:                nat64;
+};
+
+type RecordRef = record {
+  ceremony_number: nat64;
+  content_hash:    text;
+  archived_at_ns:  nat64;
+};
+
+type LegalDoc = record {
+  kind:            text;
+  version:         nat32;
+  effective_date:  text;
+  content_md:      text;
+  content_hash:    text;
+  published_at_ns: nat64;
+};
+
+type LegalDocMeta = record {
+  kind:            text;
+  version:         nat32;
+  effective_date:  text;
+  content_hash:    text;
+  published_at_ns: nat64;
+};
+
+type CanisterConfig = record {
+  owner:   principal;
+  writers: vec principal;
+};
+
+type HopeAndGraceError = variant {
+  Unauthorized;
+  NotFound;
+  AlreadyArchived:   nat64;
+  InvalidRecord:     text;
+  AnonymousCaller;
+  InvariantViolated: text;
+};
+
+type HealthStatus = record {
+  canister:        text;
+  ok:              bool;
+  ceremony_count:  nat64;
+  legal_doc_count: nat64;
+  timestamp_ns:    nat64;
+};
+
+// Phase 1a: no service block yet. The canister compiles and the types
+// are all defined; methods land in Phase 1b. Once methods exist, the
+// service block from HOPEANDGRACE_INTEGRATION_SPEC.md will be inserted here.
