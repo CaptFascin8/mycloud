@@ -19,6 +19,7 @@ serde_json           = "1"
 ic-stable-structures = "0.6"
 sha2                 = "0.10"
 hex                  = "0.4"
+ciborium             = "0.2"
 
 # Wasm-tuned release profile. ICP charges per instruction; smaller binaries
 # cost less to deploy and run.

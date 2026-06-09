@@ -11,7 +11,9 @@ candid               = { workspace = true }
 ic-cdk               = { workspace = true }
 ic-stable-structures = { workspace = true }
 serde                = { workspace = true }
-sha2                 = "0.10"
+sha2                 = { workspace = true }
+hex                  = { workspace = true }
+ciborium             = { workspace = true }
 
 [dev-dependencies]
-hex = "0.4"
+hex = { workspace = true }
