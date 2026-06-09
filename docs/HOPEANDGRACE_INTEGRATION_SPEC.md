@@ -77,6 +77,204 @@ Plus six architectural decisions from the review:
 
 ---
 
+## Phase 1b refinement — content_hash is canister-produced (June 8, 2026)
+
+Decision revised after H&G Claude review. The Phase 0 plan had H&G sending
+a `content_hash` field that the canister would verify. Both Claudes
+independently concluded this was a false-assurance pattern: a hash whose
+canonical encoding isn't precisely defined is a fingerprint that verifies
+nothing while looking like it does.
+
+The fix changes two things at once:
+
+**1. Two distinct types instead of one.**
+
+```rust
+// What H&G's @dfinity/agent code sends. NO content_hash, NO archived_at_ns.
+pub struct SettlementRecordInput {
+    pub record_version:   u32,
+    pub ceremony_number:  u64,
+    pub ceremony_date:    String,
+    pub random_seed:      String,
+    pub pool_total_cents: u64,
+    pub split:            CeremonySplit,
+    pub angel:            AngelOutcome,
+    pub soul:             SoulOutcome,
+    pub direct_blessings: DirectBlessings,
+    pub outcome:          CeremonyOutcome,
+    pub rollover_cents:   u64,
+    pub ops_ledger_entry: LedgerEntry,
+    pub ledger:           Vec<LedgerEntry>,
+    pub generated_at_ns:  u64,
+}
+
+// What gets stored on-chain. Input + two canister-populated fields.
+pub struct SettlementRecord {
+    // ... all fields from SettlementRecordInput, in identical order ...
+    pub content_hash:   String,  // canister-computed
+    pub archived_at_ns: u64,     // canister-computed
+}
+```
+
+Making the omitted fields *structurally absent* from the input type
+eliminates a whole class of "did I set this?" confusion. H&G's TypeScript
+client physically cannot send them.
+
+**2. The hashed view is `SettlementRecordInput`, exactly.**
+
+```rust
+content_hash = sha256_hex(canonical_cbor(input_as_received))
+```
+
+The canister hashes the input *before* it adds anything. There is no
+"excluded fields" list to keep in sync between sides — the type system
+IS the exclusion. Field-order contract lives in exactly one place: the
+declaration order of `SettlementRecordInput`. Reordering those fields is
+a `record_version` bump.
+
+This means invariant #7 from the original spec is no longer a gate
+("reject if hash doesn't match"). It's just a derived field the canister
+computes deterministically from the bytes it received. Phase 1b ships
+invariants 1–6 + #8 as gates; #7 becomes assignment, not validation.
+
+### Why canonical CBOR (via ciborium)?
+
+- **No library-version drift** — CBOR's encoding rules are RFC 8949,
+  not the library's whim. Upgrading ciborium doesn't change output bytes.
+  (Candid does NOT have this property — type tables can reorder across
+  candid library versions.)
+- **Cross-language friendly** — every major language has a canonical
+  CBOR library. H&G's Node-side round-trip test uses `cbor-x` or similar.
+- **Serde-derive includes all fields automatically** — no "forgot to
+  extend the encoder" gap that would silently leave a field unhashed.
+  Adding a field to `SettlementRecordInput` means it's in the hash by
+  construction.
+- **Handles nested structs and Vec<LedgerEntry> for free.**
+- **~10 lines of code** in the canister, ~50KB wasm size impact.
+
+### ciborium-specific caveat (worth knowing)
+
+ciborium encodes a struct as a CBOR **map in field-declaration order**
+and does NOT sort keys per RFC 8949 §4.2 by default. For our fixed
+schema this is perfectly deterministic — but the cross-language verifier
+must emit keys in that same field-declaration order, not sorted.
+
+The cross-language round-trip test (see below) is the safeguard: if Node
+and Rust ever disagree on encoding order, the test fails loudly. If
+matching field order across libraries proves annoying, we can switch
+the input to a CBOR array (no keys → nothing to order). For now, start
+with the map approach and let the test prove correctness.
+
+### Cross-language round-trip test (Phase 1b deliverable)
+
+`scripts/test_hopeandgrace_cbor.{js,ts}` — a small Node script that:
+1. Builds sample `SettlementRecordInput` values
+2. CBOR-encodes them by the documented rule (cbor-x or similar)
+3. sha256-hexes the result
+4. Asserts byte-equal to what the canister returns in `RecordRef.content_hash`
+
+The test IS the canonical-encoding spec. Documentation in this file is
+for humans; the test is for machines. Both should agree.
+
+Sample vectors must hit the CBOR cross-language divergence hotspots:
+
+- **An `Option::None` and an `Option::Some` for `story_cid`/`story_hash`** —
+  None vs Some encode differently in CBOR; classic mismatch point.
+- **Both `CeremonyOutcome` variants (`Claimed` and `RevertedToChalice`)** —
+  confirm the enum hashes as the string variant name (e.g. `"Claimed"`),
+  not a numeric index, and that Node emits it identically.
+- **A negative `amount_cents` in a ledger entry** — CBOR negative integers
+  are their own major type (major 1, not major 0); worth a vector.
+- **A populated `ledger` Vec with 2–3 entries** — exercises CBOR array
+  encoding.
+
+Floats would have been the fourth and worst landmine — already eliminated
+by the cents + basis-points decision in Phase 0.
+
+### Provenance / non-repudiation is NOT what content_hash provides
+
+Worth being explicit: `content_hash` proves the canister stored exactly
+these bytes. It does NOT prove "H&G authored these bytes." That property
+comes from the **authorized-writer principal check** on `archive_ceremony` —
+the canister knows it was H&G because the caller's principal is in the
+`writers` Vec. Authenticity via access control, not hash comparison.
+
+If end-to-end cryptographic non-repudiation is ever needed (H&G's signing
+key signs each record, anyone can verify against H&G's public key), that's
+a future Checkpoint 4.5.2 item with `ic_cdk::ecdsa_public_key` or similar.
+Not in Phase 1b scope. Not what hashes are for.
+
+### Two different hashes doing two different jobs
+
+When the canister stores a record with a story:
+
+| Field          | What it is                                          | Who computes   |
+|----------------|-----------------------------------------------------|----------------|
+| `story_hash`   | sha256 of raw UTF-8 story bytes (the story file)    | H&G            |
+| `content_hash` | sha256 of canonical CBOR of `SettlementRecordInput` | canister       |
+
+`story_hash` lets a verifier confirm that the bytes fetched from IPFS via
+`story_cid` are the bytes H&G originally pinned. It's about story content
+integrity. H&G computes it because H&G owns the original bytes — no
+encoding ambiguity because raw UTF-8 has no canonical encoding question.
+
+`content_hash` lets a verifier confirm the record itself wasn't mangled
+during storage. It's about record integrity. Canister computes it because
+the canonical CBOR rule lives in canister code (the source of truth).
+
+These are NOT redundant. They protect different surfaces. Keep both.
+
+### Coordination notes (for Phase 3 wiring)
+
+When the canister is deployed and the Candid file is shared with H&G
+Claude for Phase 3 work, the Candid MUST export BOTH types:
+
+- `SettlementRecordInput` — what H&G's `@dfinity/agent` code encodes
+- `SettlementRecord` — what queries return
+
+H&G Claude's archive push code on the Node side will encode against
+`SettlementRecordInput`, so its field order must exactly match the
+Rust struct declaration. If the spec pins this struct as the canonical
+field-order source, the two sides cannot drift.
+
+The `archive_ceremony` method signature becomes:
+
+```candid
+archive_ceremony : (SettlementRecordInput)
+                    -> (variant { Ok: RecordRef; Err: HopeAndGraceError });
+```
+
+(Takes Input, returns Ref containing the computed content_hash.)
+
+### Updated IPFS workflow (replaces the old version in this doc)
+
+```
+Hope & Grace daily archive job:
+  for ceremony in due_ceremonies:
+    if soul.share_permission and soul.story_text:
+      story_bytes = utf8(soul.story_text)
+      story_hash  = sha256_hex(story_bytes)
+      story_cid   = mycloud_ipfs_pin(story_bytes)
+      soul_payload.story_cid  = Some(story_cid)
+      soul_payload.story_hash = Some(story_hash)
+    else:
+      soul_payload.story_cid  = None
+      soul_payload.story_hash = None
+
+    input = build_settlement_record_input(...)
+    // Note: no content_hash, no archived_at_ns. Those come back in RecordRef.
+    result = hopeandgrace.archive_ceremony(input)
+    // result is Ok(RecordRef { ceremony_number, content_hash, archived_at_ns })
+    mysql.mark_archived(
+        ceremony_id,
+        result.ceremony_number,
+        result.content_hash,
+        result.archived_at_ns
+    )
+```
+
+---
+
 ## SettlementRecord — canister storage shape
 
 Translated from the handoff's JSON shape to canister types with the
@@ -386,23 +584,37 @@ they got the wrong CID).
 
 ## Phases
 
-**Phase 0** (this doc, ~30 min): ✅ DONE  decisions locked, spec written
-**Phase 1** (~4 hours, fresh session this evening): canister implementation
-  - `backend/hopeandgrace/` Rust crate
-  - `backend/hopeandgrace/src/lib.rs` with all types + methods
-  - `backend/hopeandgrace/hopeandgrace.did` with Candid
-  - `dfx.json` updated to declare the new canister
-  - `scripts/test_hopeandgrace.sh` integration tests covering all methods
-    + all 8 invariant validations + access control
+**Phase 0** (~30 min): ✅ DONE  decisions locked, spec written
+**Phase 1a** (~90 min): ✅ DONE  data model + storage scaffolding, 7 unit tests
+**Phase 1b** (~4 hours, fresh session): canister methods + invariants + tests
+  - Add `SettlementRecordInput` type per the June 8 refinement above
+  - Add `ciborium` to workspace deps
+  - Implement `archive_ceremony(SettlementRecordInput) -> Result<RecordRef, _>`:
+    - Auth check (caller in writers, not anonymous)
+    - Compute content_hash from `sha256_hex(canonical_cbor(input))`
+    - Build `SettlementRecord = input + content_hash + archived_at_ns`
+    - Run invariants 1–6 + #8 (NOT #7 — that's now just assignment)
+    - Insert into stable storage
+    - Return RecordRef
+  - Implement `get_ceremony`, `list_ceremonies`, `public_totals`
+  - Implement `put_legal_doc`, `get_legal_doc`, `list_legal_doc_versions`
+  - Implement access control: `set_owner`, `add_writer`, `remove_writer`,
+    `list_writers`, `get_owner`
+  - Implement `health_check`
+  - Integration tests via `scripts/test_hopeandgrace.sh` (all positive
+    and negative paths)
+  - Cross-language CBOR round-trip test in
+    `scripts/test_hopeandgrace_cbor.{js,ts}` (the canonical-encoding contract)
 **Phase 2** (~1 hour): deploy to mainnet
   - estimate cost: ~5T cycles for creation + initial allocation, ~$5 USD
   - record canister ID, share with Hope & Grace Claude
+  - share the Candid file (which MUST include `SettlementRecordInput`)
   - authorize H&G service identity as a writer
 **Phase 3** (Hope & Grace Claude's responsibility, ~2 hours):
   - service identity setup
-  - daily archive job
+  - daily archive job sending `SettlementRecordInput`
   - IPFS pinning workflow
-  - mark-archived bookkeeping
+  - mark-archived bookkeeping (stores returned content_hash + archived_at_ns)
 **Phase 4** (~3 hours, can parallel with Phase 3):
   - Ripples page on hopeandgrace.space
   - `@dfinity/agent` browser integration
@@ -423,6 +635,14 @@ they got the wrong CID).
 - **vetKeys for legal doc authoring.** Future hardening — sign published
   legal docs with a vetKey so versions are provably authored by the council.
   Defer per CLOUD_FACTORY.md Stage 6.
+- **Checkpoint 4.5.2 — H&G-signed records for non-repudiation.** Today the
+  canister authenticates H&G via the authorized-writer principal check.
+  If we ever want end-to-end cryptographic proof "this record was produced
+  by H&G's signing key, not just stored under H&G's principal," the
+  correct primitive is a signature — H&G signs the canonical CBOR before
+  sending, the canister verifies against H&G's pubkey (stored in canister
+  state), and anyone querying can verify independently. Uses
+  `ic_cdk::ecdsa_public_key` or similar. NOT what content_hash is for.
 - **Migration path if SettlementRecord schema changes.** Bumping
   `record_version` is the lever. Old records stay readable; new records reject
   if writer sends old version. We'll think about this when v2 is actually needed.
