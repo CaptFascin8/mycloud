@@ -854,6 +854,305 @@ fn health_check() -> HealthStatus {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Public API — read methods (ceremonies)
+// ---------------------------------------------------------------------------
+//
+// All queries are public — no auth, no caller check. The whole point of
+// on-chain transparency is that anyone (with or without an identity) can
+// read these. Ripples of Compassion reads them via @dfinity/agent in the
+// browser; the dashboard reads them; H&G's own server can read them for
+// reconciliation; arbitrary auditors can read them.
+
+/// Direct lookup by ceremony_number. Returns None if not archived.
+#[query]
+fn get_ceremony(ceremony_number: u64) -> Option<SettlementRecord> {
+    CEREMONIES.with(|c| c.borrow().get(&ceremony_number))
+}
+
+/// Paginated listing of ceremony summaries, oldest-first.
+///
+/// `offset` is the number of records to skip from the start.
+/// `limit` caps the result size; values over 200 are clamped to 200
+/// to keep query response sizes bounded.
+///
+/// Returns SettlementSummary (not full SettlementRecord) to keep the
+/// payload small — the frontend uses summaries to build the list view,
+/// then calls get_ceremony(n) for the detail view.
+#[query]
+fn list_ceremonies(offset: u64, limit: u64) -> Vec<SettlementSummary> {
+    let limit = limit.min(200);  // hard cap to keep query response bounded
+    CEREMONIES.with(|c| {
+        c.borrow()
+            .iter()
+            .skip(offset as usize)
+            .take(limit as usize)
+            .map(|(_, record)| SettlementSummary {
+                ceremony_number:     record.ceremony_number,
+                ceremony_date:       record.ceremony_date.clone(),
+                outcome:             record.outcome,
+                pool_total_cents:    record.pool_total_cents,
+                soul_received_cents: record.soul.total_received_cents,
+                has_story:           record.soul.story_cid.is_some(),
+                content_hash:        record.content_hash.clone(),
+            })
+            .collect()
+    })
+}
+
+/// Aggregate totals across all ceremonies. Computed on read (not cached),
+/// so the result is always correct by construction — no stale-counter
+/// risk. At Hope & Grace's expected scale (hundreds of ceremonies/year),
+/// the O(n) iteration is microseconds. Revisit caching only if measured.
+///
+/// Distinct soul/angel counts use HashSet — straightforward when iterating,
+/// expensive to maintain incrementally if we ever swap to cached counters.
+#[query]
+fn public_totals() -> Totals {
+    use std::collections::HashSet;
+
+    let mut total_pool_cents:             u64 = 0;
+    let mut total_to_souls_cents:         u64 = 0;
+    let mut total_divine_offering_cents:  u64 = 0;
+    let mut total_direct_blessings_cents: u64 = 0;
+    let mut ceremonies:                   u64 = 0;
+    let mut soul_uuids:  HashSet<String> = HashSet::new();
+    let mut angel_uuids: HashSet<String> = HashSet::new();
+
+    CEREMONIES.with(|c| {
+        for (_, rec) in c.borrow().iter() {
+            ceremonies += 1;
+            total_pool_cents             = total_pool_cents.saturating_add(rec.pool_total_cents);
+            total_to_souls_cents         = total_to_souls_cents.saturating_add(rec.soul.total_received_cents);
+            total_divine_offering_cents  = total_divine_offering_cents.saturating_add(rec.split.divine_offering_cents);
+            total_direct_blessings_cents = total_direct_blessings_cents.saturating_add(rec.direct_blessings.total_cents);
+            soul_uuids.insert(rec.soul.uuid.clone());
+            angel_uuids.insert(rec.angel.uuid.clone());
+        }
+    });
+
+    Totals {
+        ceremonies,
+        total_pool_cents,
+        total_to_souls_cents,
+        total_divine_offering_cents,
+        total_direct_blessings_cents,
+        souls_blessed: soul_uuids.len() as u64,
+        angels_active: angel_uuids.len() as u64,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Public API — read methods (legal documents)
+// ---------------------------------------------------------------------------
+
+/// Returns the LATEST version of a legal document by kind.
+///
+/// LegalDocKey encoding is (kind_len, kind_bytes, version_be_bytes), so
+/// iterating in default order groups same-kind entries with ascending
+/// versions. We take the LAST entry matching kind to get the latest.
+///
+/// Common case: get_legal_doc("terms") returns current terms of service.
+/// For historical retrieval use get_legal_doc_version(kind, version).
+#[query]
+fn get_legal_doc(kind: String) -> Option<LegalDoc> {
+    LEGAL_DOCS.with(|d| {
+        let docs = d.borrow();
+        // Scan for entries with matching kind; keep the highest version.
+        // We could do a range query if we had key-prefix utilities, but
+        // LegalDoc is rare-write (a few entries ever) so linear scan is fine.
+        let mut latest: Option<LegalDoc> = None;
+        for (key, doc) in docs.iter() {
+            if key.kind == kind {
+                latest = match latest {
+                    None       => Some(doc.clone()),
+                    Some(prev) if doc.version > prev.version => Some(doc.clone()),
+                    Some(prev) => Some(prev),
+                };
+            }
+        }
+        latest
+    })
+}
+
+/// Returns a SPECIFIC version of a legal document. Used for compliance
+/// audits, archaeology, "what did the terms say on date X" queries.
+#[query]
+fn get_legal_doc_version(kind: String, version: u32) -> Option<LegalDoc> {
+    LEGAL_DOCS.with(|d| {
+        d.borrow().get(&LegalDocKey { kind, version })
+    })
+}
+
+/// Lists all versions of a legal document kind, in ascending version
+/// order. Returns metadata only (no content_md) to keep response size
+/// bounded — frontends use this to build the "version history" list,
+/// then call get_legal_doc_version(kind, n) for the full content.
+#[query]
+fn list_legal_doc_versions(kind: String) -> Vec<LegalDocMeta> {
+    LEGAL_DOCS.with(|d| {
+        d.borrow()
+            .iter()
+            .filter(|(key, _)| key.kind == kind)
+            .map(|(_, doc)| LegalDocMeta {
+                kind:            doc.kind.clone(),
+                version:         doc.version,
+                effective_date:  doc.effective_date.clone(),
+                content_hash:    doc.content_hash.clone(),
+                published_at_ns: doc.published_at_ns,
+            })
+            .collect()
+    })
+}
+// ---------------------------------------------------------------------------
+// Public API — write methods (the actual point of this canister)
+// ---------------------------------------------------------------------------
+//
+// Both write methods are restricted to authorized writers (caller in
+// writers Vec). They return RecordRef on success — a small struct with
+// the primary key + content_hash + archived_at_ns, which the writer
+// stores back in their MySQL row marking the record archived.
+//
+// Asymmetry on content_hash, per the design principle:
+//   * archive_ceremony: canister computes content_hash from canonical CBOR
+//   * put_legal_doc:    canister verifies client-supplied content_hash
+// Justified because SettlementRecord requires canonical encoding (only
+// canister can be authority); LegalDoc.content_hash is over raw UTF-8
+// bytes (anyone can reproduce, so client supplies and canister verifies).
+
+/// Archive a ceremony's settlement record. Idempotent by ceremony_number.
+///
+/// Behavior on success:
+///   1. Authorize caller (must be in writers list)
+///   2. Reject if ceremony_number already archived (returns AlreadyArchived,
+///      NOT an error variant — H&G can detect-and-skip on retry)
+///   3. Validate all invariants (3, 4, 5, 6, 8 — see check_all_invariants)
+///   4. Compute content_hash = sha256(canonical_cbor(input))
+///   5. Build SettlementRecord = input + content_hash + archived_at_ns
+///   6. Insert into stable storage
+///   7. Return RecordRef
+///
+/// The input never contains content_hash or archived_at_ns — those fields
+/// are structurally absent from SettlementRecordInput. The canister adds
+/// them when constructing the stored SettlementRecord. This means H&G's
+/// TypeScript client cannot accidentally send a stale hash.
+#[update]
+fn archive_ceremony(input: SettlementRecordInput) -> Result<RecordRef, HopeAndGraceError> {
+    // All invariants in order: auth, idempotency, then conservation.
+    // check_all_invariants short-circuits on first failure.
+    check_all_invariants(&input)?;
+
+    // Compute content_hash from the canonical CBOR encoding of the input.
+    // This hash is what off-chain verifiers will reproduce to confirm
+    // the canister stored what H&G sent.
+    let content_hash   = compute_content_hash(&input);
+    let archived_at_ns = now_ns();
+
+    // Build the stored record: input fields + the two canister-populated ones.
+    let record = SettlementRecord {
+        record_version:   input.record_version,
+        ceremony_number:  input.ceremony_number,
+        ceremony_date:    input.ceremony_date,
+        random_seed:      input.random_seed,
+        pool_total_cents: input.pool_total_cents,
+        split:            input.split,
+        angel:            input.angel,
+        soul:             input.soul,
+        direct_blessings: input.direct_blessings,
+        outcome:          input.outcome,
+        rollover_cents:   input.rollover_cents,
+        ops_ledger_entry: input.ops_ledger_entry,
+        ledger:           input.ledger,
+        generated_at_ns:  input.generated_at_ns,
+        content_hash:     content_hash.clone(),
+        archived_at_ns,
+    };
+
+    let ceremony_number = record.ceremony_number;
+    CEREMONIES.with(|c| c.borrow_mut().insert(ceremony_number, record));
+
+    Ok(RecordRef {
+        ceremony_number,
+        content_hash,
+        archived_at_ns,
+    })
+}
+
+/// Publish a versioned legal document (terms, privacy policy, disclosures).
+///
+/// Behavior on success:
+///   1. Authorize caller (must be in writers list)
+///   2. Verify client-supplied content_hash == sha256(content_md.bytes())
+///      lowercase hex. Returns InvariantViolated if mismatch.
+///   3. Reject if (kind, version) already exists — versions are immutable
+///   4. Stamp published_at_ns
+///   5. Insert into stable storage
+///   6. Return RecordRef (using kind+version as the identity, version
+///      stored in ceremony_number slot for uniform reference shape)
+///
+/// Bumping `kind` to a new version: client provides version = N+1 where
+/// N is the latest existing version. The canister doesn't enforce
+/// strictly-monotonic versions (gaps allowed), but it does reject
+/// duplicates and verifies the hash.
+#[update]
+fn put_legal_doc(doc: LegalDoc) -> Result<RecordRef, HopeAndGraceError> {
+    caller_must_be_writer()?;
+
+    // Verify content_hash matches the raw UTF-8 bytes of content_md.
+    // This is the legitimate verification gate — both sides can compute
+    // sha256 of raw bytes with no canonical-encoding ambiguity.
+    let expected_hash = compute_legal_doc_hash(&doc.content_md);
+    if doc.content_hash != expected_hash {
+        return Err(HopeAndGraceError::InvariantViolated(format!(
+            "content_hash mismatch: client sent {} but sha256(content_md) is {}",
+            doc.content_hash, expected_hash
+        )));
+    }
+
+    // Reject duplicate (kind, version)
+    let key = LegalDocKey {
+        kind:    doc.kind.clone(),
+        version: doc.version,
+    };
+    let already_exists = LEGAL_DOCS.with(|d| d.borrow().contains_key(&key));
+    if already_exists {
+        return Err(HopeAndGraceError::InvariantViolated(format!(
+            "legal doc with kind='{}' version={} already exists; bump version",
+            doc.kind, doc.version
+        )));
+    }
+
+    // Stamp published_at_ns (canister-populated; client value ignored)
+    let stored_doc = LegalDoc {
+        kind:            doc.kind.clone(),
+        version:         doc.version,
+        effective_date:  doc.effective_date,
+        content_md:      doc.content_md,
+        content_hash:    doc.content_hash.clone(),
+        published_at_ns: now_ns(),
+    };
+
+    LEGAL_DOCS.with(|d| d.borrow_mut().insert(key, stored_doc.clone()));
+
+    // Return a RecordRef shaped like SettlementRecord's — version goes
+    // in the ceremony_number slot. Frontends know to interpret by context.
+    Ok(RecordRef {
+        ceremony_number: stored_doc.version as u64,
+        content_hash:    stored_doc.content_hash,
+        archived_at_ns:  stored_doc.published_at_ns,
+    })
+}
+
+/// Helper: compute the canonical legal-doc hash. Used both by the
+/// verification gate in `put_legal_doc` and (in test code, eventually)
+/// for sanity checks. Pinned to: sha256, UTF-8 bytes of content_md,
+/// lowercase hex.
+fn compute_legal_doc_hash(content_md: &str) -> String {
+    use sha2::{Sha256, Digest};
+    let mut hasher = Sha256::new();
+    hasher.update(content_md.as_bytes());
+    hex::encode(hasher.finalize())
+}
 ic_cdk::export_candid!();
 // ---------------------------------------------------------------------------
 // Unit tests — Storable roundtrips and ordering
