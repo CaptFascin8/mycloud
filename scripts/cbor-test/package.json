@@ -1,0 +1,14 @@
+{
+  "name": "hopeandgrace-cbor-test",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cross-language CBOR round-trip test — proves Rust (ciborium) and Node (cbor-x) produce byte-equal canonical CBOR encodings of SettlementRecordInput. The canonical-encoding contract.",
+  "main": "test_hopeandgrace_cbor.js",
+  "type": "module",
+  "scripts": {
+    "test": "node test_hopeandgrace_cbor.js"
+  },
+  "dependencies": {
+    "cbor-x": "^1.5.9"
+  }
+}
