@@ -45,3 +45,11 @@ Thumbs.db
 
 # Personal — not for the public repo
 docs/STARTUP_GUIDE.md
+
+# H&G writer identity — never commit
+backend/icp/*.pem
+backend/icp/.env
+.env
+
+# Local-only secrets
+.local-secrets/

@@ -105,7 +105,10 @@ pub struct SettlementRecordInput {
     pub rollover_cents:   u64,
     pub ops_ledger_entry: LedgerEntry,
     pub ledger:           Vec<LedgerEntry>,
-    pub generated_at_ns:  u64,
+    pub generated_at_ns:  u64,   // H&G's record-generation time (when they
+                                 // assembled this from MySQL). Distinct from
+                                 // canister's archived_at_ns. H&G sends this;
+                                 // it goes into the canonical CBOR hash.
 }
 
 // What gets stored on-chain. Input + two canister-populated fields.
@@ -223,6 +226,48 @@ during storage. It's about record integrity. Canister computes it because
 the canonical CBOR rule lives in canister code (the source of truth).
 
 These are NOT redundant. They protect different surfaces. Keep both.
+
+### The general principle for who computes a hash
+
+H&G Claude framed this elegantly during the Pass 4 design:
+
+> **Canister computes the hash when the hash is over a canonical-encoded
+> structure (no external party can be the encoding authority). The client
+> supplies the hash, and the canister verifies, when the hash is over raw
+> bytes (anyone can reproduce it).**
+
+This single rule justifies the asymmetry in the API:
+
+- `archive_ceremony(SettlementRecordInput) -> RecordRef` — canister
+  computes `content_hash`. The hash is over a structure that requires
+  canonical CBOR encoding; only the canister can be the encoding authority.
+  No gate; the hash is derived, populated in the returned RecordRef.
+
+- `put_legal_doc(LegalDoc) -> RecordRef` — canister VERIFIES the
+  client-supplied `content_hash`. The hash is over raw UTF-8 bytes of
+  `content_md`; anyone can reproduce it with `sha256(content_md.bytes())`.
+  Gate: reject with `Err(InvariantViolated)` on mismatch.
+
+For LegalDoc the verification gate IS legitimate (catches transmission
+corruption, no canonical-encoding ambiguity to litigate). For
+SettlementRecord the verification gate is NOT legitimate (would require
+agreeing on a canonical encoding the client doesn't control), which is
+why Phase 1b removed that gate.
+
+### LegalDoc.content_hash — precise specification
+
+To prevent representation disagreement between H&G and the canister,
+the LegalDoc hash is pinned to three specific properties:
+
+1. **Digest:** sha256
+2. **Bytes:** raw UTF-8 encoding of `content_md` (the markdown source).
+   Not the parsed/normalized markdown — the literal bytes the H&G server
+   has in memory.
+3. **Output format:** lowercase hexadecimal, 64 chars.
+
+So `LegalDoc.content_hash == lowercase_hex(sha256(content_md.bytes()))`.
+Any deviation (uppercase hex, base64, normalized markdown) is a bug on
+the H&G side, caught by the canister's verification gate.
 
 ### Coordination notes (for Phase 3 wiring)
 
