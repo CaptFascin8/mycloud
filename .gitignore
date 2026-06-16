@@ -6,7 +6,6 @@ Cargo.lock
 # ICP / dfx
 .dfx/
 .env
-canister_ids.json
 dist/
 
 # Node / Vite
